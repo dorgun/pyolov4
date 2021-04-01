@@ -1,7 +1,7 @@
-from utils.google_utils import *
-from utils.layers import *
-from utils.parse_config import *
-from utils import torch_utils
+from pyolov4.utils.google_utils import *
+from pyolov4.utils.layers import *
+from pyolov4.utils.parse_config import *
+from pyolov4.utils import torch_utils
 
 ONNX_EXPORT = False
 
@@ -193,6 +193,7 @@ class YOLOLayer(nn.Module):
         self.nx, self.ny, self.ng = 0, 0, 0  # initialize number of x, y gridpoints
         self.anchor_vec = self.anchors / self.stride
         self.anchor_wh = self.anchor_vec.view(1, self.na, 1, 1, 2)
+        self.deepstream = False
 
         if ONNX_EXPORT:
             self.training = False
@@ -259,10 +260,28 @@ class YOLOLayer(nn.Module):
                 torch.sigmoid(p[:, 5:self.no]) * torch.sigmoid(p[:, 4:5])  # conf
             return p_cls, xy * ng, wh
 
+        elif self.deepstream:
+
+            io = p.sigmoid()
+
+            x_res = io[..., 0] * 2. - 0.5 + self.grid[..., 0]
+            y_res = io[..., 0] * 2. - 0.5 + self.grid[..., 1]
+            w_res = (io[..., 2] * 2.) ** 2
+            h_res = (io[..., 3] * 2.) ** 2
+            wh_res = torch.cat((w_res.unsqueeze(4), h_res.unsqueeze(4)), 4) * self.stride
+            wh_res *= self.anchor_wh
+            det_confs = io[..., 4].reshape(bs, self.na * self.nx * self.ny)
+            cls_confs = io[..., 5:].reshape(bs, self.na * self.nx * self.ny, self.nc)
+            xy = torch.cat((x_res.unsqueeze(4), y_res.unsqueeze(4)), dim=4) * self.stride
+
+            xy_re = xy.view(bs, self.na * self.nx * self.ny, 2)
+            wh_re = wh_res.view(bs, -1, 2)
+
+            return torch.cat((xy_re, wh_re), 2), det_confs, cls_confs  # view [1, 3, 13, 13, 85] as [1, 507, 85]
         else:  # inference
             io = p.sigmoid()
-            io[..., :2] = (io[..., :2] * 2. - 0.5 + self.grid)
-            io[..., 2:4] = (io[..., 2:4] * 2) ** 2 * self.anchor_wh
+            io[..., :2] = (io[..., :2] * 2. - 0.5 + self.grid.cuda())
+            io[..., 2:4] = (io[..., 2:4] * 2) ** 2 * self.anchor_wh.cuda()
             io[..., :4] *= self.stride
             #io = p.clone()  # inference output
             #io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid  # xy
@@ -286,6 +305,7 @@ class Darknet(nn.Module):
         self.version = np.array([0, 2, 5], dtype=np.int32)  # (int32) version info: major, minor, revision
         self.seen = np.array([0], dtype=np.int64)  # (int64) number of images seen during training
         self.info(verbose) if not ONNX_EXPORT else None  # print model description
+        self.deepstream = False
 
     def forward(self, x, augment=False, verbose=False):
 
@@ -356,6 +376,9 @@ class Darknet(nn.Module):
         elif ONNX_EXPORT:  # export
             x = [torch.cat(x, 0) for x in zip(*yolo_out)]
             return x[0], torch.cat(x[1:3], 1)  # scores, boxes: 3780x80, 3780x4
+        elif self.deepstream :
+            print("Darknet deepstream")
+            return [torch.cat(x, 1) for x in zip(*yolo_out)]
         else:  # inference or test
             x, p = zip(*yolo_out)  # inference output, training output
             x = torch.cat(x, 1)  # cat yolo outputs

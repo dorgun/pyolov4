@@ -1,0 +1,10 @@
+# train and val datasets (image directory or *.txt file with image paths)
+train: ../data/feeds/train.txt  # 118k images
+val: ../data/feeds/val.txt  # 5k images
+#test: ./data/coco/testdev2017.txt  # 20k images for submission to https://competitions.codalab.org/competitions/20794
+
+# number of classes
+nc: 2
+
+# class names
+names: ['person', 'face']

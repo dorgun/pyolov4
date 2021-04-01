@@ -1,24 +1,14 @@
 import argparse
-import glob
 import json
-import os
-import shutil
-from pathlib import Path
 
-import numpy as np
-import torch
-import yaml
-from tqdm import tqdm
-
-from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import (
-    coco80_to_coco91_class, check_file, check_img_size, compute_loss, non_max_suppression,
+    coco80_to_coco91_class, check_img_size, compute_loss, non_max_suppression,
     scale_coords, xyxy2xywh, clip_coords, plot_images, xywh2xyxy, box_iou, output_to_target, ap_per_class)
 from utils.torch_utils import select_device, time_synchronized
 
-from models.models import *
-#from utils.datasets import *
+from pyolov4.models.models import *
+
 
 def load_classes(path):
     # Loads *.names file at 'path'
@@ -242,7 +232,7 @@ def test(data,
             from pycocotools.cocoeval import COCOeval
 
             imgIds = [int(Path(x).stem) for x in dataloader.dataset.img_files]
-            cocoGt = COCO(glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
+            cocoGt = COCO(glob.glob('./data/coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
             cocoDt = cocoGt.loadRes(f)  # initialize COCO pred api
             cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
             cocoEval.params.imgIds = imgIds  # image IDs to evaluate
