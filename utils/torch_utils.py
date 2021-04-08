@@ -1,6 +1,7 @@
 import math
 import os
 import time
+from contextlib import contextmanager
 from copy import deepcopy
 
 import torch
@@ -10,11 +11,19 @@ import torch.nn.functional as F
 import torchvision.models as models
 
 
-def init_seeds(seed=0):
+def init_seeds(seed: int = 0, more_reproducible: bool = False):
+    """Initialize seed and switch to deterministic mode cudnn
+    Args:
+        seed: Seed to randomize initialization
+        more_reproducible: If true then cudnn is switched to deterministic mode
+
+    Returns:
+
+    """
     torch.manual_seed(seed)
 
     # Speed-reproducibility tradeoff https://pytorch.org/docs/stable/notes/randomness.html
-    if seed == 0:  # slower, more reproducible
+    if more_reproducible:  # slower, more reproducible
         cudnn.deterministic = True
         cudnn.benchmark = False
     else:  # faster, less reproducible
@@ -224,3 +233,19 @@ class ModelEMA:
     def update_attr(self, model, include=(), exclude=('process_group', 'reducer')):
         # Update EMA attributes
         copy_attr(self.ema, model, include, exclude)
+
+
+@contextmanager
+def torch_distributed_zero_first(local_rank: int):
+    """Decorator to make all processes in distributed training wait for each local_master to do something.
+    Args:
+        local_rank: rank of local process
+
+    Returns:
+
+    """
+    if local_rank not in [-1, 0]:
+        torch.distributed.barrier()
+    yield
+    if local_rank == 0:
+        torch.distributed.barrier()

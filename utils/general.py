@@ -5,11 +5,11 @@ import random
 import shutil
 import subprocess
 import time
-from contextlib import contextmanager
 from copy import copy
 from pathlib import Path
 from sys import platform
-
+from typing import Optional
+from pyolov4.utils.torch_utils import init_seeds as pytorch_init_seeds
 import cv2
 import matplotlib
 import matplotlib.pyplot as plt
@@ -22,33 +22,20 @@ from scipy.cluster.vq import kmeans
 from scipy.signal import butter, filtfilt
 from tqdm import tqdm
 
-from utils.torch_utils import init_seeds, is_parallel
+from utils.torch_utils import is_parallel
 
 # Set printoptions
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
 matplotlib.rc('font', **{'size': 11})
-
 # Prevent OpenCV from multithreading (to use PyTorch DataLoader)
 cv2.setNumThreads(0)
 
 
-@contextmanager
-def torch_distributed_zero_first(local_rank: int):
-    """
-    Decorator to make all processes in distributed training wait for each local_master to do something.
-    """
-    if local_rank not in [-1, 0]:
-        torch.distributed.barrier()
-    yield
-    if local_rank == 0:
-        torch.distributed.barrier()
-
-
-def init_seeds(seed=0):
+def init_seeds(seed=0, more_reproducible: bool = False):
     random.seed(seed)
     np.random.seed(seed)
-    init_seeds(seed=seed)
+    pytorch_init_seeds(more_reproducible=more_reproducible)
 
 
 def get_latest_run(search_dir='./runs'):
@@ -816,7 +803,7 @@ def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=10
 
 
 def print_mutation(hyp, results, yaml_file='hyp_evolved.yaml', bucket=''):
-    # Print mutation results to evolve.txt (for use with train.py --evolve)
+    # Print mutation results to evolve.txt (for use with run_train.py --evolve)
     a = '%10s' * len(hyp) % tuple(hyp.keys())  # hyperparam keys
     b = '%10.3g' * len(hyp) % tuple(hyp.values())  # hyperparam values
     c = '%10.4g' * len(results) % results  # results (P, R, mAP@0.5, mAP@0.5:0.95, val_losses x 3)
@@ -907,14 +894,20 @@ def output_to_target(output, width, height):
     return np.array(targets)
 
 
-def increment_dir(dir, comment=''):
-    # Increments a directory runs/exp1 --> runs/exp2_comment
+def increment_dir(path: Path, suffix: Optional[str] = ''):
+    """Increments a directory runs/exp1 --> runs/exp2_comment
+    Args:
+        path (Path):  main path
+        suffix: Additional suffix to folder name
+
+    Returns: path with incremented number of experiments and additional suffix name
+    """
     n = 0  # number
-    dir = str(Path(dir))  # os-agnostic
-    d = sorted(glob.glob(dir + '*'))  # directories
+    path = str(Path(path))  # os-agnostic
+    d = sorted(glob.glob(path + '*'))  # directories
     if len(d):
-        n = max([int(x[len(dir):x.find('_') if '_' in x else None]) for x in d]) + 1  # increment
-    return dir + str(n) + ('_' + comment if comment else '')
+        n = max([int(x[len(path):x.find('_') if '_' in x else None]) for x in d]) + 1  # increment
+    return path + str(n) + ('_' + suffix if suffix else '')
 
 
 # Plotting functions ---------------------------------------------------------------------------------------------------

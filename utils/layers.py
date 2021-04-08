@@ -5,7 +5,10 @@ from utils.general import *
 import torch
 from torch import nn
 
-from mish_cuda import MishCuda as Mish
+from pyolov4.envconfig import MODE
+
+if MODE=='cuda':
+    from mish_cuda import MishCuda as Mish
 
 
 def make_divisible(v, divisor):
