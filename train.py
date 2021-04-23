@@ -18,14 +18,14 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import test  # import test.py to get mAP after each epoch
-from models.models import *
-from utils.datasets import create_dataloader
-from utils.general import (
+from pyolov4.models.models import *
+from pyolov4.utils.datasets import create_dataloader
+from pyolov4.utils.general import (
     check_img_size, torch_distributed_zero_first, labels_to_class_weights, plot_labels, check_anchors,
     labels_to_image_weights, compute_loss, plot_images, fitness, strip_optimizer, plot_results,
     get_latest_run, check_git_status, check_file, increment_dir, print_mutation, plot_evolution)
-from utils.google_utils import attempt_download
-from utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
+from pyolov4.utils.google_utils import attempt_download
+from pyolov4.utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
 
 def train(hyp, opt, device, tb_writer=None):
@@ -113,7 +113,9 @@ def train(hyp, opt, device, tb_writer=None):
                 file.write(ckpt['training_results'])  # write results.txt
 
         # Epochs
+        print("start_epoch=", start_epoch)
         start_epoch = ckpt['epoch'] + 1
+        print("start_epoch=", start_epoch)
         if epochs < start_epoch:
             print('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
                   (weights, ckpt['epoch'], epochs))
@@ -368,13 +370,13 @@ def train(hyp, opt, device, tb_writer=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='yolov4.pt', help='initial weights path')
+    parser.add_argument('--weights', type=str, default='', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='', help='hyperparameters path, i.e. data/hyp.scratch.yaml')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='train,test sizes')
+    parser.add_argument('--img-size', nargs='+', type=int, default=[704, 704], help='train,test sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const='get_last', default=False,
                         help='resume from given path/last.pt, or most recent run if blank')
@@ -396,10 +398,12 @@ if __name__ == '__main__':
 
     # Resume
     if opt.resume:
+        print("opt.resume=", opt.resume )
         last = get_latest_run() if opt.resume == 'get_last' else opt.resume  # resume from most recent run
         if last and not opt.weights:
             print(f'Resuming training from {last}')
         opt.weights = last if opt.resume and not opt.weights else opt.weights
+        print("opt.weights=", opt.weights)
     if opt.local_rank == -1 or ("RANK" in os.environ and os.environ["RANK"] == "0"):
         check_git_status()
 

@@ -468,7 +468,9 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     # Resume
+    print("opt.resume=", opt.resume)
     if opt.resume:
+        print("Resume training")
         last = get_latest_run() if opt.resume == 'get_last' else opt.resume  # resume from most recent run
         if last and not opt.weights:
             print(f'Resuming training from {last}')

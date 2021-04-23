@@ -54,6 +54,7 @@ def init_seeds(seed=0):
 def get_latest_run(search_dir='./runs'):
     # Return path to most recent 'last.pt' in /runs (i.e. to --resume from)
     last_list = glob.glob(f'{search_dir}/**/last*.pt', recursive=True)
+    print("last_list", last_list)
     return max(last_list, key=os.path.getctime)
 
 
