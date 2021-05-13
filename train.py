@@ -61,11 +61,13 @@ def train(hyp, opt, device, tb_writer=None):
     if pretrained:
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location=device)  # load checkpoint
+        # ckpt = torch.load(weights, map_location=device)  # load checkpoint
         model = Darknet(opt.cfg).to(device)  # create
-        state_dict = {k: v for k, v in ckpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
-        model.load_state_dict(state_dict, strict=False)
-        print('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
+
+        # state_dict = {k: v for k, v in ckpt.state_dict().items() if model.state_dict()[k].numel() == v.numel()}
+        model.load_state_dict(torch.load(weights), strict=False)
+        # print('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
+        print("loaded pretrained")
     else:
         model = Darknet(opt.cfg).to(device) # create
 
@@ -86,6 +88,7 @@ def train(hyp, opt, device, tb_writer=None):
     if opt.adam:
         optimizer = optim.Adam(pg0, lr=hyp['lr0'], betas=(hyp['momentum'], 0.999))  # adjust beta1 to momentum
     else:
+        print("SGD optimizer")
         optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
 
     optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})  # add pg1 with weight_decay
@@ -101,27 +104,27 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Resume
     start_epoch, best_fitness = 0, 0.0
-    if pretrained:
-        # Optimizer
-        if ckpt['optimizer'] is not None:
-            optimizer.load_state_dict(ckpt['optimizer'])
-            best_fitness = ckpt['best_fitness']
-
-        # Results
-        if ckpt.get('training_results') is not None:
-            with open(results_file, 'w') as file:
-                file.write(ckpt['training_results'])  # write results.txt
-
-        # Epochs
-        print("start_epoch=", start_epoch)
-        start_epoch = ckpt['epoch'] + 1
-        print("start_epoch=", start_epoch)
-        if epochs < start_epoch:
-            print('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
-                  (weights, ckpt['epoch'], epochs))
-            epochs += ckpt['epoch']  # finetune additional epochs
-
-        del ckpt, state_dict
+    # if pretrained:
+    #     # Optimizer
+    #     if ckpt['optimizer'] is not None:
+    #         optimizer.load_state_dict(ckpt['optimizer'])
+    #         best_fitness = ckpt['best_fitness']
+    #
+    #     # Results
+    #     if ckpt.get('training_results') is not None:
+    #         with open(results_file, 'w') as file:
+    #             file.write(ckpt['training_results'])  # write results.txt
+    #
+    #     # Epochs
+    #     print("start_epoch=", start_epoch)
+    #     start_epoch = ckpt['epoch'] + 1
+    #     print("start_epoch=", start_epoch)
+    #     if epochs < start_epoch:
+    #         print('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
+    #               (weights, ckpt['epoch'], epochs))
+    #         epochs += ckpt['epoch']  # finetune additional epochs
+    #
+    #     del ckpt, state_dict
     
     # Image sizes
     gs = 32 # grid size (max stride)

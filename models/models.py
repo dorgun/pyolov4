@@ -265,7 +265,7 @@ class YOLOLayer(nn.Module):
             io = p.sigmoid()
 
             x_res = io[..., 0] * 2. - 0.5 + self.grid[..., 0]
-            y_res = io[..., 0] * 2. - 0.5 + self.grid[..., 1]
+            y_res = io[..., 1] * 2. - 0.5 + self.grid[..., 1]
             w_res = (io[..., 2] * 2.) ** 2
             h_res = (io[..., 3] * 2.) ** 2
             wh_res = torch.cat((w_res.unsqueeze(4), h_res.unsqueeze(4)), 4) * self.stride
@@ -277,7 +277,7 @@ class YOLOLayer(nn.Module):
             xy_re = xy.view(bs, self.na * self.nx * self.ny, 2)
             wh_re = wh_res.view(bs, -1, 2)
 
-            return torch.cat((xy_re, wh_re), 2), det_confs, cls_confs  # view [1, 3, 13, 13, 85] as [1, 507, 85]
+            return torch.cat((xy_re, wh_re), 2), det_confs, cls_confs, p  # view [1, 3, 13, 13, 85] as [1, 507, 85]
         else:  # inference
             io = p.sigmoid()
             io[..., :2] = (io[..., :2] * 2. - 0.5 + self.grid.cuda())
@@ -376,9 +376,11 @@ class Darknet(nn.Module):
         elif ONNX_EXPORT:  # export
             x = [torch.cat(x, 0) for x in zip(*yolo_out)]
             return x[0], torch.cat(x[1:3], 1)  # scores, boxes: 3780x80, 3780x4
-        elif self.deepstream :
+        elif self.deepstream:
             print("Darknet deepstream")
-            return [torch.cat(x, 1) for x in zip(*yolo_out)]
+            boxes, det_confs, cls_confs, p = zip(*yolo_out)
+            return torch.cat(boxes, 1), torch.cat(det_confs, 1), torch.cat(cls_confs, 1), p
+            # return [torch.cat(x, 1) for x in zip(*yolo_out)],
         else:  # inference or test
             x, p = zip(*yolo_out)  # inference output, training output
             x = torch.cat(x, 1)  # cat yolo outputs
