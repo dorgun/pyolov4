@@ -277,7 +277,7 @@ class YOLOLayer(nn.Module):
             xy_re = xy.view(bs, self.na * self.nx * self.ny, 2)
             wh_re = wh_res.view(bs, -1, 2)
 
-            return torch.cat((xy_re, wh_re), 2), det_confs, cls_confs, p  # view [1, 3, 13, 13, 85] as [1, 507, 85]
+            return torch.cat((xy_re, wh_re), 2), det_confs, cls_confs
         else:  # inference
             io = p.sigmoid()
             io[..., :2] = (io[..., :2] * 2. - 0.5 + self.grid.cuda())
@@ -339,6 +339,7 @@ class Darknet(nn.Module):
 
     def forward_once(self, x, augment=False, verbose=False):
         img_size = x.shape[-2:]  # height, width
+
         yolo_out, out = [], []
         if verbose:
             print('0', x.shape)
@@ -378,8 +379,16 @@ class Darknet(nn.Module):
             return x[0], torch.cat(x[1:3], 1)  # scores, boxes: 3780x80, 3780x4
         elif self.deepstream:
             print("Darknet deepstream")
-            boxes, det_confs, cls_confs, p = zip(*yolo_out)
-            return torch.cat(boxes, 1), torch.cat(det_confs, 1), torch.cat(cls_confs, 1), p
+            boxes, det_confs, cls_confs = [torch.cat(x, 1) for x in zip(*yolo_out)]
+            x_res = boxes[:, :, 0]
+            y_res = boxes[:, :, 1]
+            w_res = boxes[:, :, 2]
+            h_res = boxes[:, :, 3]
+            x_res /= img_size[1]
+            y_res /= img_size[0]
+            w_res /= img_size[1]
+            h_res /= img_size[0]
+            return torch.cat([x_res.unsqueeze(2), y_res.unsqueeze(2), w_res.unsqueeze(2), h_res.unsqueeze(2)], 2), det_confs, cls_confs
             # return [torch.cat(x, 1) for x in zip(*yolo_out)],
         else:  # inference or test
             x, p = zip(*yolo_out)  # inference output, training output
@@ -390,6 +399,10 @@ class Darknet(nn.Module):
                 x[1][..., 0] = img_size[1] - x[1][..., 0]  # flip lr
                 x[2][..., :4] /= s[1]  # scale
                 x = torch.cat(x, 1)
+            x[..., 0] /= img_size[1]
+            x[..., 1] /= img_size[0]
+            x[..., 2] /= img_size[1]
+            x[..., 3] /= img_size[0]
             return x, p
 
     def fuse(self):
