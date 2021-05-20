@@ -1,3 +1,5 @@
+import torch
+
 from pyolov4.utils.google_utils import *
 from pyolov4.utils.layers import *
 from pyolov4.utils.parse_config import *
@@ -182,7 +184,7 @@ def create_modules(module_defs, img_size, cfg):
 class YOLOLayer(nn.Module):
     def __init__(self, anchors, nc, img_size, yolo_index, layers, stride):
         super(YOLOLayer, self).__init__()
-        self.anchors = torch.Tensor(anchors)
+        self.anchors = torch.IntTensor(anchors)
         self.index = yolo_index  # index of this layer in layers
         self.layers = layers  # model output layer indices
         self.stride = stride  # layer stride
@@ -270,14 +272,15 @@ class YOLOLayer(nn.Module):
             h_res = (io[..., 3] * 2.) ** 2
             wh_res = torch.cat((w_res.unsqueeze(4), h_res.unsqueeze(4)), 4) * self.stride
             wh_res *= self.anchor_wh
-            det_confs = io[..., 4].reshape(bs, self.na * self.nx * self.ny)
+            det_confs = io[..., 4:5].reshape(bs, self.na * self.nx * self.ny, 1)
             cls_confs = io[..., 5:].reshape(bs, self.na * self.nx * self.ny, self.nc)
             xy = torch.cat((x_res.unsqueeze(4), y_res.unsqueeze(4)), dim=4) * self.stride
 
             xy_re = xy.view(bs, self.na * self.nx * self.ny, 2)
             wh_re = wh_res.view(bs, -1, 2)
-
-            return torch.cat((xy_re, wh_re), 2), det_confs, cls_confs
+            print(det_confs.shape)
+            print(cls_confs.shape)
+            return torch.cat((xy_re, wh_re), 2), det_confs * cls_confs
         else:  # inference
             io = p.sigmoid()
             io[..., :2] = (io[..., :2] * 2. - 0.5 + self.grid.cuda())
@@ -379,7 +382,7 @@ class Darknet(nn.Module):
             return x[0], torch.cat(x[1:3], 1)  # scores, boxes: 3780x80, 3780x4
         elif self.deepstream:
             print("Darknet deepstream")
-            boxes, det_confs, cls_confs = [torch.cat(x, 1) for x in zip(*yolo_out)]
+            boxes, confs = [torch.cat(x, 1) for x in zip(*yolo_out)]
             x_res = boxes[:, :, 0]
             y_res = boxes[:, :, 1]
             w_res = boxes[:, :, 2]
@@ -388,7 +391,7 @@ class Darknet(nn.Module):
             y_res /= img_size[0]
             w_res /= img_size[1]
             h_res /= img_size[0]
-            return torch.cat([x_res.unsqueeze(2), y_res.unsqueeze(2), w_res.unsqueeze(2), h_res.unsqueeze(2)], 2), det_confs, cls_confs
+            return torch.cat([x_res.unsqueeze(2), y_res.unsqueeze(2), w_res.unsqueeze(2), h_res.unsqueeze(2)], 2), confs
             # return [torch.cat(x, 1) for x in zip(*yolo_out)],
         else:  # inference or test
             x, p = zip(*yolo_out)  # inference output, training output
