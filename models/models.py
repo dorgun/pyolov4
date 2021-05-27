@@ -278,8 +278,6 @@ class YOLOLayer(nn.Module):
 
             xy_re = xy.view(bs, self.na * self.nx * self.ny, 2)
             wh_re = wh_res.view(bs, -1, 2)
-            print(det_confs.shape)
-            print(cls_confs.shape)
             return torch.cat((xy_re, wh_re), 2), det_confs * cls_confs
         else:  # inference
             io = p.sigmoid()
@@ -383,15 +381,17 @@ class Darknet(nn.Module):
         elif self.deepstream:
             print("Darknet deepstream")
             boxes, confs = [torch.cat(x, 1) for x in zip(*yolo_out)]
-            x_res = boxes[:, :, 0]
-            y_res = boxes[:, :, 1]
-            w_res = boxes[:, :, 2]
-            h_res = boxes[:, :, 3]
-            x_res /= img_size[1]
-            y_res /= img_size[0]
-            w_res /= img_size[1]
-            h_res /= img_size[0]
-            return torch.cat([x_res.unsqueeze(2), y_res.unsqueeze(2), w_res.unsqueeze(2), h_res.unsqueeze(2)], 2), confs
+            x1_res = boxes[:, :, 0] - boxes[:, :, 2] * 0.5
+            y1_res = boxes[:, :, 1] - boxes[:, :, 3] * 0.5
+            x2_res = x1_res + boxes[:, :, 2]
+            y2_res = y1_res + boxes[:, :, 3]
+            x1_res /= img_size[1]
+            y1_res /= img_size[0]
+            x2_res /= img_size[1]
+            y2_res /= img_size[0]
+            return torch.cat(
+                [x1_res.unsqueeze(2), y1_res.unsqueeze(2), x2_res.unsqueeze(2), y2_res.unsqueeze(2)], 2
+            ), confs
             # return [torch.cat(x, 1) for x in zip(*yolo_out)],
         else:  # inference or test
             x, p = zip(*yolo_out)  # inference output, training output
